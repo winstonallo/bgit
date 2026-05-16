@@ -53,10 +53,7 @@ fn rebase<P: AsRef<Path>>(info: &Rebase, dir: P) -> Result<(), Error> {
         let output = std::process::Command::new("git").args(["rebase", &info.onto]).current_dir(&path).output()?;
 
         if !output.status.success() {
-            return Err(Error::Rebase {
-                repository: path.to_string_lossy().into(),
-                error: String::from_utf8(output.stderr)?,
-            });
+            tracing::error!("could not rebase '{}': {e}", path.to_string_lossy());
         }
 
         tracing::info!("rebased '{}' onto {}", path.to_string_lossy(), info.onto);
