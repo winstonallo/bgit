@@ -20,9 +20,11 @@ fn try_rebase<P: AsRef<Path>>(onto: &str, path: P) -> Result<bool, Error> {
     let path = path.as_ref();
     if !path.is_dir() {
         tracing::info!("skipping entry {path:?}: not a directory");
+        return Ok(false);
     }
     if !path.join(".git").exists() {
         tracing::info!("skipping entry {path:?}: not a git repository");
+        return Ok(false);
     }
 
     let output = std::process::Command::new("git").args(["rebase", onto]).current_dir(path).output()?;
