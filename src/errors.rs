@@ -1,17 +1,28 @@
-use crate::branch;
-use crate::rebase;
-use crate::worktree;
+use std::path::Path;
+use std::process::Command;
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
-    #[error("I/O error: {0}")]
-    IO(#[from] std::io::Error),
-    #[error("decoding error: {0}")]
-    Decoding(#[from] std::string::FromUtf8Error),
-    #[error("worktree error: {0}")]
-    Worktree(#[from] worktree::Error),
-    #[error("rebase error: {0}")]
-    Rebase(#[from] rebase::Error),
-    #[error("branch error: {0}")]
-    Branch(#[from] branch::Error),
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
+    #[error("git {op} failed in {repo}: {stderr}")]
+    Git { op: String, repo: String, stderr: String },
+    #[error("path is not absolute: {0}")]
+    NotAbsolute(String),
+    #[error("path is not a directory: {0}")]
+    NotDir(String),
+}
+
+/// Run git in `repo`, returning stdout. Non-zero exit → Error::Git with stderr.
+pub fn git(repo: impl AsRef<Path>, op: &str, args: &[&str]) -> Result<String, Error> {
+    let repo = repo.as_ref();
+    let out = Command::new("git").args(args).current_dir(repo).output()?;
+    if !out.status.success() {
+        return Err(Error::Git {
+            op: op.into(),
+            repo: repo.to_string_lossy().into(),
+            stderr: String::from_utf8_lossy(&out.stderr).trim().into(),
+        });
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into())
 }

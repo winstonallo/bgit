@@ -31,8 +31,8 @@ fn main() {
         .init();
 
     if let Err(e) = match options.command {
-        Command::Rebase(info) => rebase::rebase(&info).map_err(bgit::errors::Error::from),
-        Command::Worktree(info) => worktree::worktree(&info).map_err(bgit::errors::Error::from),
+        Command::Rebase(info) => rebase::rebase(&info),
+        Command::Worktree(info) => worktree::worktree(&info),
     } {
         tracing::error!("{e}");
         std::process::exit(1);

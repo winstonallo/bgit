@@ -1,6 +1,7 @@
 use std::path::Path;
 
 use crate::branch;
+use crate::errors::{Error, git};
 
 #[derive(clap::Parser, Debug)]
 pub struct CreateArgs {
@@ -29,68 +30,24 @@ pub struct Args {
     sub: Subcommand,
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum CreateError {
-    #[error("target path {path} is not an absolute path")]
-    TargetPathNotAbsolute { path: String },
-    #[error("could not create target directory {path}: {error}")]
-    TargetPathCreation { path: String, error: std::io::Error },
-    #[error("target path is not a directory")]
-    TargetPathNotDir { path: String },
-    #[error("could not create branch: {0}")]
-    CouldNotCreateBranch(#[from] branch::Error),
-    #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
-    #[error("creation failed at {target} for {repo}: {error}")]
-    CouldNotCreateWorktree { target: String, repo: String, error: String },
+fn create_one(repo: &str, path: &str, branch: &str) -> Result<(), Error> {
+    git(repo, "worktree add", &["worktree", "add", path, branch]).map(drop)
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum RemoveError {
-    #[error("IO error: {0}")]
-    IO(#[from] std::io::Error),
-    #[error("removal failed at {target} for {repo}: {error}")]
-    CouldNotRemoveWorktree { target: String, repo: String, error: String },
+fn remove_one(repo: &str, path: &str) -> Result<(), Error> {
+    git(repo, "worktree remove", &["worktree", "remove", path]).map(drop)
 }
 
-#[derive(thiserror::Error, Debug)]
-pub enum Error {
-    #[error("could not create worktree: {0}")]
-    Create(#[from] CreateError),
-    #[error("could not remove worktree: {0}")]
-    Remove(#[from] RemoveError),
-}
-
-fn create_one(repo: &str, target: &str, branch: &str) -> Result<(), CreateError> {
-    let output = std::process::Command::new("git")
-        .args(["worktree", "add", target, branch])
-        .current_dir(repo)
-        .output()?;
-
-    if !output.status.success() {
-        return Err(CreateError::CouldNotCreateWorktree {
-            target: target.into(),
-            repo: repo.into(),
-            error: String::from_utf8_lossy(&output.stderr).into(),
-        });
-    }
-
-    Ok(())
-}
-
-fn create_inner(info: &CreateArgs) -> Result<(), CreateError> {
+fn create(info: &CreateArgs) -> Result<(), Error> {
     let path = Path::new(&info.path);
     if !path.is_absolute() {
-        return Err(CreateError::TargetPathNotAbsolute { path: info.path.clone() });
+        return Err(Error::NotAbsolute(info.path.clone()));
     }
     if !path.exists() {
-        std::fs::create_dir_all(path).map_err(|e| CreateError::TargetPathCreation {
-            path: info.path.clone(),
-            error: e,
-        })?;
+        std::fs::create_dir_all(path)?;
     }
     if !path.is_dir() {
-        return Err(CreateError::TargetPathNotDir { path: info.path.clone() });
+        return Err(Error::NotDir(info.path.clone()));
     }
 
     if info.create_branch {
@@ -100,7 +57,7 @@ fn create_inner(info: &CreateArgs) -> Result<(), CreateError> {
                 for c in created {
                     _ = branch::delete(c, &info.branch);
                 }
-                return Err(CreateError::CouldNotCreateBranch(e));
+                return Err(e);
             }
             created.push(r);
         }
@@ -108,34 +65,14 @@ fn create_inner(info: &CreateArgs) -> Result<(), CreateError> {
 
     let mut created = vec![];
     for r in &info.repos {
-        if let Err(e) = create_one(r, &format!("{}/{r}", info.path), &info.branch) {
+        let target = format!("{}/{r}", info.path);
+        if let Err(e) = create_one(r, &target, &info.branch) {
             for r in created {
-                _ = remove_one(&info.path, r);
+                _ = remove_one(r, &format!("{}/{r}", info.path));
             }
             return Err(e);
         }
         created.push(r);
-    }
-
-    Ok(())
-}
-
-fn create(info: &CreateArgs) -> Result<(), Error> {
-    Ok(create_inner(info)?)
-}
-
-fn remove_one(path: &str, repo: &str) -> Result<(), RemoveError> {
-    let output = std::process::Command::new("git")
-        .args(["worktree", "remove", path])
-        .current_dir(repo)
-        .output()?;
-
-    if !output.status.success() {
-        return Err(RemoveError::CouldNotRemoveWorktree {
-            target: path.into(),
-            repo: repo.into(),
-            error: String::from_utf8_lossy(&output.stderr).into(),
-        });
     }
 
     Ok(())
