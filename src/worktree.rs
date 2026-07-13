@@ -62,12 +62,8 @@ pub enum Error {
 }
 
 fn create_one(repo: &str, target: &str, branch: &str) -> Result<(), CreateError> {
-    assert!(Path::new(repo).exists());
-    assert!(Path::new(target).exists());
-
-    let path = format!("{}/{repo}", target);
     let output = std::process::Command::new("git")
-        .args(["worktree", "add", &path, branch])
+        .args(["worktree", "add", target, branch])
         .current_dir(repo)
         .output()?;
 
@@ -116,11 +112,7 @@ fn create_inner(info: &CreateArgs) -> Result<(), CreateError> {
             for r in created {
                 _ = remove_one(&info.path, r);
             }
-            return Err(CreateError::CouldNotCreateWorktree {
-                target: info.path.clone(),
-                repo: r.into(),
-                error: e.to_string(),
-            });
+            return Err(e);
         }
         created.push(r);
     }
