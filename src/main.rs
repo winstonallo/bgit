@@ -4,7 +4,7 @@ use clap::{Parser, Subcommand};
 
 #[derive(Parser, Debug)]
 struct Rebase {
-    #[arg(short, long, default_value_t = String::from("origin/master"))]
+    #[arg(long, default_value_t = String::from("origin/master"))]
     onto: String,
 }
 
