@@ -20,7 +20,7 @@ fn main() {
     let options = Options::parse();
     let max_level = match options.verbose {
         true => tracing::Level::DEBUG,
-        false => tracing::Level::INFO,
+        false => tracing::Level::WARN,
     };
 
     tracing_subscriber::fmt()
